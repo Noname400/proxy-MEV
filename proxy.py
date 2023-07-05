@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, render_template
 import requests
 from requests import get, post
 from json import dumps
@@ -9,6 +9,7 @@ from datetime import datetime
 from eth.vm.forks.arrow_glacier.transactions import ArrowGlacierTransactionBuilder as TransactionBuilder
 from eth_utils import (encode_hex,to_bytes,)
 from sys import argv
+import psutil
 
 version = 'proxy server 0.9 / 05.07.23'
 telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
@@ -183,6 +184,18 @@ def handle_request():
         response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
         save_file('response',f'{response}')
         return response.content
+
+@app.route('/system')
+def system():
+    cpu_count = psutil.cpu_count()
+    return render_template('system.html', cpu_count=cpu_count)
+
+@app.route('/system-data')
+def system_data():
+    cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
+    memory_percent = psutil.virtual_memory().percent
+    cpu_count = psutil.cpu_count()
+    return {'cpu_data': cpu_percent, 'memory_data': memory_percent, 'cpu_count': cpu_count}
 
 if __name__ == '__main__':
     net = argv[1]

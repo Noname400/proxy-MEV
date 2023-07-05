@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>System Usage</title>
+    <style>
+        .progress-bar {
+            width: 200px;
+            height: 20px;
+            border: 1px solid #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #3498db;
+            width: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .progress-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            margin: 0;
+            font-weight: bold;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        function updateSystem() {
+            $.getJSON('/system-data', function(data) {
+                var cpuData = data.cpu_data;
+                var memoryData = data.memory_data;
+
+                for (var i = 0; i < cpuData.length; i++) {
+                    var cpuUsage = cpuData[i];
+                    var cpuProgressBar = $('#cpu-progress-bar-' + i);
+                    var cpuProgressLabel = $('#cpu-progress-label-' + i);
+                    cpuProgressBar.css('width', cpuUsage + '%');
+                    cpuProgressLabel.text('CPU ' + i + ': ' + cpuUsage + '%');
+                }
+
+                var memoryProgressBar = $('#memory-progress-bar');
+                var memoryProgressLabel = $('#memory-progress-label');
+                memoryProgressBar.css('width', memoryData + '%');
+                memoryProgressLabel.text('Memory: ' + memoryData + '%');
+            });
+        }
+        $(document).ready(function() {
+            setInterval(updateSystem, 1000);
+        });
+    </script>
+</head>
+<body>
+    <h1>System Usage</h1>
+    <h2>CPU Usage</h2>
+    {% for i in range(cpu_count) %}
+        <div class="progress-bar">
+            <div id="cpu-progress-bar-{{ i }}" class="progress-bar-fill"></div>
+            <p id="cpu-progress-label-{{ i }}" class="progress-label"></p>
+        </div>
+    {% endfor %}
+
+    <h2>Memory Usage</h2>
+    <div class="progress-bar">
+        <div id="memory-progress-bar" class="progress-bar-fill"></div>
+        <p id="memory-progress-label" class="progress-label"></p>
+    </div>
+    
+</body>
+</html>

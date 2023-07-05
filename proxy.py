@@ -7,11 +7,12 @@ from time import time
 from os import path, mkdir
 from datetime import datetime
 from eth.vm.forks.arrow_glacier.transactions import ArrowGlacierTransactionBuilder as TransactionBuilder
-from eth_utils import (
-  encode_hex,
-  to_bytes,
-)
-version = 'proxy server 0.7 / 05.07.23'
+from eth_utils import (encode_hex,to_bytes,)
+from sys import argv
+
+version = 'proxy server 0.9 / 05.07.23'
+telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
+telegram_channel_id = '@scanpvknon'
 app = Flask(__name__)
 
 stat_server = '127.0.0.1:3200'
@@ -78,6 +79,16 @@ response_times = []
 mev_addr = ['0x7a250d5630b4cf539739df2c5dacb4c659f2488d','0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b','0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad']
 headers = {'Content-Type': 'application/json'}
 
+def send_telegram(text: str, telegram_channel_id, telegram_token):
+    try:
+        get('https://api.telegram.org/bot{}/sendMessage'.format(telegram_token), params=dict(
+        chat_id=telegram_channel_id,
+        text=text))
+    except:
+        print(f'[E] Error send telegram. Reconnect.')
+        return False
+    else: 
+        return True
 
 def send_stat(ip_, from_, to_, value_):
     url = f'http://{stat_server}/savedata'
@@ -150,7 +161,12 @@ def handle_request():
     if request_data['method'] == 'eth_sendRawTransaction':
         transaction_hash = request_data['params']
         tx_to, tx_value, tx_from = decode_tx(transaction_hash[0])
-        send_stat(client_ip, tx_from, tx_to, str(tx_value))
+        
+        try:
+            send_stat(client_ip, tx_from, tx_to, str(tx_value))
+        except:
+            send_telegram(f'[W] Ошибка передачи данных на сервер статистики', telegram_channel_id, telegram_token)
+            
         if tx_to in mev_addr:
             save_file('transaction', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};Change provider - YES;send to:{fast_mev}")
             response = requests.post(fast_mev, headers=headers, data=dumps(request_data))
@@ -169,15 +185,21 @@ def handle_request():
         return response.content
 
 if __name__ == '__main__':
+    net = argv[1]
+    print(net)
     print(f'[I] Version: {version}')
     print(f'[I] Stat server: {stat_server}')
+    if net == 'test': (f'[I] Запущена тестовая сеть')
+    else: print('[I] Запущена основная сеть')
     print('[*] Starting checks provider ...')
-    res = sort_provide(mainnet_providers)
-    fast_provider = find_key(mainnet_providers, res)
-    #======= test =======
-    # res = sort_provide(testnet_providers)
-    # fast_provider = find_key(testnet_providers, res)
-    #====================
+    if net == 'test':
+        res = sort_provide(mainnet_providers)
+        fast_provider = find_key(mainnet_providers, res)
+    else:
+        #======= test =======
+        res = sort_provide(testnet_providers)
+        fast_provider = find_key(testnet_providers, res)
+        #====================
     res = sort_provide(mev_providers)
     fast_mev = find_key(mev_providers, res)
     

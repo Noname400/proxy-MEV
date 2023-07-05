@@ -1,5 +1,6 @@
 from flask import Flask, request
 import requests
+from requests import get, post
 from json import dumps
 from time import time
 # from web3 import Web3
@@ -10,8 +11,11 @@ from eth_utils import (
   encode_hex,
   to_bytes,
 )
-version = 0.6
+version = 'proxy server 0.7 / 05.07.23'
 app = Flask(__name__)
+
+stat_server = '127.0.0.1:3200'
+proxy_port = 3100
 
 testnet_providers = [
     {
@@ -73,9 +77,21 @@ fast_mev_provider = ""
 response_times = []
 mev_addr = ['0x7a250d5630b4cf539739df2c5dacb4c659f2488d','0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b','0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad']
 headers = {'Content-Type': 'application/json'}
-web_port = 3000
+
+
+def send_stat(ip_, from_, to_, value_):
+    url = f'http://{stat_server}/savedata'
+    headers = {'Content-Type': 'application/json'}
+    data = {'ip_': ip_, 'from_': from_, 'to_': to_ , 'value_': value_}
+    try:
+        response = post(url, headers=headers, data=dumps(data))
+    except:
+        return None
+    j = response.json()
+    return j['message']
 
 def decode_tx(tx):
+    print(f'Decoding tx: {tx}')
     original_hexstr = tx
     signed_tx_as_bytes = to_bytes(hexstr=original_hexstr)
     decoded_tx = TransactionBuilder().decode(signed_tx_as_bytes)
@@ -130,36 +146,41 @@ def handle_request():
     global fast_provider
     global fast_mev
     request_data = request.get_json()
-    print(request_data)
+    #print(request_data)
     if request_data['method'] == 'eth_sendRawTransaction':
         transaction_hash = request_data['params']
         tx_to, tx_value, tx_from = decode_tx(transaction_hash[0])
-        print(tx_to, tx_value, tx_from, tx_value)
+        send_stat(client_ip, tx_from, tx_to, str(tx_value))
         if tx_to in mev_addr:
             save_file('transaction', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};Change provider - YES;send to:{fast_mev}")
             response = requests.post(fast_mev, headers=headers, data=dumps(request_data))
             save_file('response',f'{response}')
-            print(response)
+            #print(response)
             return response.content
         else:
             save_file('transaction', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};Change provider - NO;send to:{fast_provider}")
             response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
             save_file('response',f'{response}')
-            print(response)
+            #print(response)
             return response.content
     else:
         response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
         save_file('response',f'{response}')
-        print(response)
         return response.content
 
 if __name__ == '__main__':
-    print(f'Version: {version}')
+    print(f'[I] Version: {version}')
+    print(f'[I] Stat server: {stat_server}')
     print('[*] Starting checks provider ...')
     res = sort_provide(mainnet_providers)
     fast_provider = find_key(mainnet_providers, res)
+    #======= test =======
+    # res = sort_provide(testnet_providers)
+    # fast_provider = find_key(testnet_providers, res)
+    #====================
     res = sort_provide(mev_providers)
     fast_mev = find_key(mev_providers, res)
+    
     print(f'[I] Best server provider: {fast_provider}')
     print(f'[I] Best server MEV: {fast_mev}')
-    app.run(host='0.0.0.0', port=web_port)
+    app.run(host='0.0.0.0', port=proxy_port)

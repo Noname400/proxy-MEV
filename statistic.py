@@ -1,7 +1,4 @@
 #!/usr/bin/python3
-# encoding=utf-8
-# -*- coding: utf-8 -*-
-
 """
 @author: NonameHUNT
 @GitHub: https://github.com/Noname400
@@ -9,6 +6,7 @@
 """
 
 version = 'server statistic 0.1 rev/05.07.23'
+
 telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
 telegram_channel_id = '@scanpvknon'
 
@@ -16,7 +14,6 @@ from flask import Flask, request, jsonify, render_template
 from datetime import datetime
 import sqlite3
 from os import path, mkdir, system, name
-from sys import argv
 
 app = Flask(__name__)
 app.secret_key = 'cba0a242e99c1c6dce337df4757ab7803b93f38003a9b5de1f945ca4ca716c08'
@@ -24,81 +21,51 @@ app.secret_key = 'cba0a242e99c1c6dce337df4757ab7803b93f38003a9b5de1f945ca4ca716c
 def save_file(infile, desc, text):
     if path.exists('log'): pass
     else: mkdir('log')
-    file = f'log/{infile}-{desc}.log'
-    f = open(file, 'a', encoding='utf-8', errors='ignore')
+    filename = f'log/{infile}-{desc}.log'
+    f = open(filename, encoding='utf-8', errors='ignore', mode='a')
     f.write(f'[*] {text}\n')
     f.close()
 
 def date_str():
     now = datetime.now()
-    return now.strftime("%Y/%m/%d/, %H:%M:%S")
+    return now.strftime("%Y/%m/%d/ %H:%M:%S")
 
 @app.route('/savedata', methods=['POST'])
 def savedata():
     counts = 0
-    name = request.json['name']
-    mnemonic = request.json['mnemonic']
-    begin = request.json['begin']
-    end = request.json['end']
-    path = request.json['path']
-    coin = request.json['coin']
-    msg = request.json['msg']
-    pvk = request.json['pvk']
-    mode = request.json['mode']
-
-    conn_old = sqlite3.connect(DB_OLD)
-    select_query_old = "SELECT mnemonic, coin FROM found WHERE mnemonic = ? AND coin = ?"
-    existing_row_old = conn_old.execute(select_query_old, (mnemonic, coin,)).fetchone()
-    print(existing_row_old)
+    print(request.json)
+    ip_ = request.json['ip_']
+    from_ = request.json['from_']
+    to_ = request.json['to_']
+    value_ = request.json['value_']
+    print(request.json)
 
     conn = sqlite3.connect(DB)
-    select_query = "SELECT counts FROM found WHERE mnemonic = ? AND coin = ?"
-    existing_row = conn.execute(select_query, (mnemonic, coin,)).fetchone()
-    print(existing_row_old, existing_row)
-
-    if existing_row_old != None:
-        counts = 1
-        insert_query = "INSERT INTO foundold (name, mnemonic, counts, begin, end, path, coin, msg, pvk, mode, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        conn.execute(insert_query, (name, mnemonic, counts, begin, end, path, coin, msg, pvk, mode, date_str()))
+    select_query = "SELECT count_ FROM stat WHERE from_ = ? AND to_ = ?"
+    existing_row_from_to = conn.execute(select_query, (from_, to_)).fetchone()
+    
+    if existing_row_from_to is not None:
+        counts = existing_row_from_to[0] + 1
+        update_query = "UPDATE stat SET from_ = ?, to_ = ?, value_ = ?, count_ = ?, timestamp_ = ?  WHERE from_ = ? AND to_ = ?"
+        conn.execute(update_query, (from_, to_, value_, counts, date_str(), from_, to_))
         conn.commit()
         conn.close()
-        conn_old.close()
-        return jsonify({'message': 'Data dabbling'})
-
-    # if existing_row_old != None and existing_row != None:
-    #     print('Запись в новой и старой базе найдены .........')
-    #     counts = existing_row[0]
-    #     counts += 1
-    #     update_query = "UPDATE found SET counts = ? WHERE mnemonic = ? AND coin = ?"
-    #     conn.execute(update_query, (counts, mnemonic, coin,))
-
-    if existing_row != None:
-        print('Запись в новой базе найдена а в старой нет .........')
-        counts = existing_row[0]
-        counts += 1
-        update_query = "UPDATE found SET counts = ? WHERE mnemonic = ? AND coin = ?"
-        conn.execute(update_query, (counts, mnemonic, coin,))
-        conn.commit()
-        conn.close()
-        conn_old.close()
-        return jsonify({'message': 'Data UPDATE'})
+        return jsonify({'message': 'Data +'})
 
     else:
-        counts = 1
-        insert_query = "INSERT INTO found (name, mnemonic, counts, begin, end, path, coin, msg, pvk, mode, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        conn.execute(insert_query, (name, mnemonic, counts, begin, end, path, coin, msg, pvk, mode, date_str()))
+        insert_query = "INSERT INTO stat (ip_, from_, to_, value_, count_, timestamp_) VALUES (?, ?, ?, ?, ?, ?)"
+        conn.execute(insert_query, (ip_, from_, to_, value_, 1, date_str()))
         conn.commit()
         conn.close()
-        conn_old.close()
-        return jsonify({'message': 'Data saved successfully'})
+        return jsonify({'message': 'Data add'})
 
 @app.route('/stat')
 def stat():
-    limit = request.args.get('limit', default=100, type=int)
+    limit = request.args.get('limit', default=50, type=int)
     page = request.args.get('page', default=1, type=int)
     offset = (page - 1) * limit
     conn = sqlite3.connect(DB)
-    cursor = conn.execute(f'SELECT * FROM numbers LIMIT {limit} OFFSET {offset}')
+    cursor = conn.execute(f'SELECT * FROM stat LIMIT {limit} OFFSET {offset}')
     data = cursor.fetchall()
     len_ = len(data)
     conn.close()
@@ -115,7 +82,7 @@ if __name__ == '__main__':
 
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS numbers (id INTEGER PRIMARY KEY, number INTEGER, name TEXT, range_start INTEGER, range_end INTEGER, ver TEXT, timestamp TEXT)')
+    c.execute('CREATE TABLE IF NOT EXISTS stat (id INTEGER PRIMARY KEY, ip_ TEXT, from_ TEXT, to_ TEXT, value_ TEXT, count_ INTEGER, timestamp_ TEXT)')
     conn.commit()
     conn.close()
     

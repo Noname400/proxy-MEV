@@ -197,25 +197,27 @@ def system_data():
     cpu_count = psutil.cpu_count()
     return {'cpu_data': cpu_percent, 'memory_data': memory_percent, 'cpu_count': cpu_count}
 
+
 if __name__ == '__main__':
     net = argv[1]
     print(net)
     print(f'[I] Version: {version}')
     print(f'[I] Stat server: {stat_server}')
+    
     if net == 'test': (f'[I] Запущена тестовая сеть')
     else: print('[I] Запущена основная сеть')
-    print('[*] Starting checks provider ...')
-    if net == 'test':
-        res = sort_provide(mainnet_providers)
-        fast_provider = find_key(mainnet_providers, res)
-    else:
-        #======= test =======
-        res = sort_provide(testnet_providers)
-        fast_provider = find_key(testnet_providers, res)
-        #====================
-    res = sort_provide(mev_providers)
-    fast_mev = find_key(mev_providers, res)
     
-    print(f'[I] Best server provider: {fast_provider}')
-    print(f'[I] Best server MEV: {fast_mev}')
+    # print('[*] Starting checks provider ...')
+    # if net == 'test':
+    #     res = sort_provide(mainnet_providers)
+    #     fast_provider = find_key(mainnet_providers, res)
+    # else:
+    #     #======= test =======
+    #     res = sort_provide(testnet_providers)
+    #     fast_provider = find_key(testnet_providers, res)
+    #     #====================
+    # res = sort_provide(mev_providers)
+    # fast_mev = find_key(mev_providers, res)    
+    # print(f'[I] Best server provider: {fast_provider}')
+    # print(f'[I] Best server MEV: {fast_mev}')
     app.run(host='0.0.0.0', port=proxy_port)

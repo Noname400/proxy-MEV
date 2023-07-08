@@ -197,7 +197,6 @@ def handle_request():
     global num_threads_mev
     global num_threads_net
     global mode
-    print(f'------- {num_threads_mev} ------- {num_threads_net} ------- {fast_provider}------- {fast_mev} ------')
     request_data = request.get_json()
     if request_data['method'] == 'eth_sendRawTransaction':
         data = request_data['params']
@@ -273,7 +272,7 @@ def handle_request():
 
 if __name__ == '__main__':
     freeze_support()
-    net = argv[1]
+    net = 'mainnet' #argv[1]
     mode = net
     print(f'[I] Version: {version}')
     print(f'[I] Stat server: {stat_server}')
@@ -282,7 +281,7 @@ if __name__ == '__main__':
     if net != 'test':
         print('[I] Запущена основная сеть')
         res = sort_provide(mainnet_providers)
-        fast_provider = find_key(mainnet_providers, res)
+        fast_provider = 'https://eth-mainnet.g.alchemy.com/v2/ANUgbxXb5fRwPxLlAZ9fGcKGYdcoaik5'#find_key(mainnet_providers, res)
         num_threads_net = len(mainnet_providers)
     else:
         #======= test =======

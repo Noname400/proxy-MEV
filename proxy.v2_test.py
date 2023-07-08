@@ -1,25 +1,42 @@
+from multiprocessing import Pool, freeze_support, cpu_count
+from signal import SIGINT, SIG_IGN, signal
 from flask import Flask, request, render_template
 import requests
 from requests import get, post
 from json import dumps
 from time import time
-# from web3 import Web3
+from web3 import Web3
 from os import path, mkdir
 from datetime import datetime
 from eth.vm.forks.arrow_glacier.transactions import ArrowGlacierTransactionBuilder as TransactionBuilder
 from eth_utils import (encode_hex,to_bytes,)
 from sys import argv
 import psutil
+from hexbytes import HexBytes
 
-version = 'proxy server 0.9 / 05.07.23'
+version = 'proxy server 0.11 / 08.07.23'
 telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
 telegram_channel_id = '@scanpvknon'
-app = Flask(__name__)
+app_test = Flask(__name__)
 
 stat_server = '127.0.0.1:3200'
-proxy_port = 3100
 
 testnet_providers = [
+    {
+        "name": "Infura",
+        "url": "https://goerli.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"
+    },
+    {
+        "name": "test",
+        "url": "https://goerli.blockpi.network/v1/rpc/public"
+    },
+    {
+        "name": "test2",
+        "url": "https://eth-goerli.public.blastapi.io"
+    }
+    ]
+
+testnet_providers_ = [
     {
         "name": "Infura",
         "url": "https://goerli.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"
@@ -76,9 +93,11 @@ mev_providers = [
 
 fast_mainnet_provider = ""
 fast_mev_provider = ""
-response_times = []
 mev_addr = ['0x7a250d5630b4cf539739df2c5dacb4c659f2488d','0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b','0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad']
 headers = {'Content-Type': 'application/json'}
+
+def init_worker():
+    signal(SIGINT, SIG_IGN)
 
 def send_telegram(text: str, telegram_channel_id, telegram_token):
     try:
@@ -103,7 +122,6 @@ def send_stat(ip_, from_, to_, value_):
     return j['message']
 
 def decode_tx(tx):
-    print(f'Decoding tx: {tx}')
     original_hexstr = tx
     signed_tx_as_bytes = to_bytes(hexstr=original_hexstr)
     decoded_tx = TransactionBuilder().decode(signed_tx_as_bytes)
@@ -136,10 +154,8 @@ def check_provider_speed(provider):
         response = requests.get(provider["url"])
         end_time = time()
         response_time = end_time - start_time
-        #print(f"{provider['name']}: {response_time} seconds")
         return response_time
     except requests.exceptions.RequestException as e:
-        #print(f"{provider['name']}: Error - {e}")
         return None
     
 def sort_provide(prov_list):
@@ -149,75 +165,87 @@ def sort_provide(prov_list):
         if response_time is not None:
             response_times[provider["name"]] = response_time
     fastest_provider = min(response_times, key=response_times.get)
-    #print(f"Самый быстрый провайдер: {fastest_provider}")
     return fastest_provider
 
-@app.route('/', methods=['POST'])
-def handle_request():
-    client_ip = request.remote_addr
-    global fast_provider
-    global fast_mev
-    request_data = request.get_json()
-    #print(request_data)
-    if request_data['method'] == 'eth_sendRawTransaction':
-        transaction_hash = request_data['params']
-        tx_to, tx_value, tx_from = decode_tx(transaction_hash[0])
-        
-        try:
-            send_stat(client_ip, tx_from, tx_to, str(tx_value))
-        except:
-            send_telegram(f'[W] Ошибка передачи данных на сервер статистики', telegram_channel_id, telegram_token)
-            
-        if tx_to in mev_addr:
-            save_file('transaction', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};Change provider - YES;send to:{fast_mev}")
-            response = requests.post(fast_mev, headers=headers, data=dumps(request_data))
-            save_file('response',f'{response}')
-            #print(response)
-            return response.content
-        else:
-            save_file('transaction', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};Change provider - NO;send to:{fast_provider}")
-            response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
-            save_file('response',f'{response}')
-            #print(response)
-            return response.content
-    else:
-        response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
-        save_file('response',f'{response}')
-        return response.content
+def send_transaction(data):
+    request_data = data[0]
+    url = data[1]
+    response = requests.post(url, headers=headers, data=dumps(request_data))
+    return response.json()
 
-@app.route('/system')
+@app_test.route('/system')
 def system():
     cpu_count = psutil.cpu_count()
     return render_template('system.html', cpu_count=cpu_count)
 
-@app.route('/system-data')
+@app_test.route('/system-data')
 def system_data():
     cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
     memory_percent = psutil.virtual_memory().percent
     cpu_count = psutil.cpu_count()
     return {'cpu_data': cpu_percent, 'memory_data': memory_percent, 'cpu_count': cpu_count}
 
+@app_test.route('/', methods=['POST'])
+def handle_request():
+    l = []
+    send_client = ''
+    client_ip = request.remote_addr
+    fast_provider = 'https://goerli.gateway.tenderly.co'
+    fast_mev = 'https://rsync-builder.xyz'
+    num_threads_mev = len(mev_providers)
+    num_threads_net = len(testnet_providers)
+    request_data = request.get_json()
+    if request_data['method'] == 'eth_sendRawTransaction':
+        data = request_data['params']
+        raw_transaction = data[0]
+        tx_to, tx_value, tx_from = decode_tx(raw_transaction)
+        #отправка данных на сервер статистики (запускается отдельно)
+        try:
+            send_stat(client_ip, tx_from, tx_to, str(tx_value))
+        except:
+            send_telegram(f'[W] Ошибка передачи данных на сервер статистики', telegram_channel_id, telegram_token)
+        # если найдена транза на мев адрес то делаем подмену    
+        if tx_to in mev_addr:
+            print('############## MEV ##################')
+            pool = Pool(num_threads_mev, init_worker)
+            for num in range(num_threads_mev):
+                l.append([request_data, mev_providers[num]['url']])
+            results = pool.map(send_transaction, l)
+
+            for result in results:
+                print(f'------------- -------- {result} ---- --------------')
+                if 'result' in result:
+                    send_client = result
+                    save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - yes;send to:{fast_mev}")
+                else: print(f'Result ------------> {result}')
+            
+            print('############## MEV ##################')
+            if 'result' in send_client:
+                return send_client
+            else: return None
+        
+        else:
+            print('############## PROVIDERS TEST ##################')
+            pool = Pool(num_threads_net, init_worker)
+            for num in range(num_threads_net):
+                l.append([request_data, testnet_providers[num]['url']])
+            results = pool.map(send_transaction, l)
+
+            for result in results:
+                print(f'------------- -------- {result} ---- --------------')
+                if 'result' in result:
+                    send_client = result
+                    save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - no;send to:{fast_provider}")
+                else: print(f'Result ------------> {result}')
+            
+            print('############## PROVIDERS TEST ##################')
+            if 'result' in send_client:
+                return send_client
+            else: return None
+    else:
+        response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
+        save_file('response',f'{response}')
+        return response.content
 
 if __name__ == '__main__':
-    net = argv[1]
-    print(net)
-    print(f'[I] Version: {version}')
-    print(f'[I] Stat server: {stat_server}')
-    
-    if net == 'test': (f'[I] Запущена тестовая сеть')
-    else: print('[I] Запущена основная сеть')
-    
-    # print('[*] Starting checks provider ...')
-    # if net == 'test':
-    #     res = sort_provide(mainnet_providers)
-    #     fast_provider = find_key(mainnet_providers, res)
-    # else:
-    #     #======= test =======
-    #     res = sort_provide(testnet_providers)
-    #     fast_provider = find_key(testnet_providers, res)
-    #     #====================
-    # res = sort_provide(mev_providers)
-    # fast_mev = find_key(mev_providers, res)    
-    # print(f'[I] Best server provider: {fast_provider}')
-    # print(f'[I] Best server MEV: {fast_mev}')
-    app.run(host='0.0.0.0', port=proxy_port)
+    app_test.run(host='0.0.0.0', port=3300)

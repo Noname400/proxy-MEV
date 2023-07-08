@@ -14,12 +14,14 @@ from sys import argv
 import psutil
 from hexbytes import HexBytes
 
-version = 'proxy server 0.11 mainnet / 08.07.23'
+version = 'proxy server 0.10 / 08.07.23'
 telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
 telegram_channel_id = '@scanpvknon'
 app = Flask(__name__)
 
 stat_server = '127.0.0.1:3200'
+proxy_port = 3100
+mode = ''
 
 testnet_providers = [
     {
@@ -190,10 +192,12 @@ def handle_request():
     l = []
     send_client = ''
     client_ip = request.remote_addr
-    fast_provider = 'https://eth-mainnet.g.alchemy.com/v2/ANUgbxXb5fRwPxLlAZ9fGcKGYdcoaik5'
-    fast_mev = 'https://rpc.lightspeedbuilder.info'
-    num_threads_mev = len(mev_providers)
-    num_threads_net = len(mainnet_providers)
+    global fast_provider
+    global fast_mev
+    global num_threads_mev
+    global num_threads_net
+    global mode
+    print(f'------- {num_threads_mev} ------- {num_threads_net} ------- {fast_provider}------- {fast_mev} ------')
     request_data = request.get_json()
     if request_data['method'] == 'eth_sendRawTransaction':
         data = request_data['params']
@@ -224,26 +228,74 @@ def handle_request():
             else: return None
         
         else:
-            print('############## PROVIDERS ##################')
-            pool = Pool(num_threads_net, init_worker)
-            for num in range(num_threads_net):
-                l.append([request_data, mainnet_providers[num]['url']])
-            results = pool.map(send_transaction, l)
+            #если тестовый запуск берем данные из словаря тестового
+            if mode == 'test':
+                print('############## PROVIDERS ##################')
+                pool = Pool(num_threads_net, init_worker)
+                for num in range(num_threads_net):
+                    l.append([request_data, testnet_providers[num]['url']])
+                results = pool.map(send_transaction, l)
 
-            for result in results:
-                if 'result' in result:
-                    send_client = result
-                    save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - no;send to:{fast_provider}")
-                else: print(f'Result ------------> {result}')
-            
-            print('############## PROVIDERS ##################')
-            if 'result' in send_client:
-                return send_client
-            else: return None
+                for result in results:
+                    print(f'------------- -------- {result} ---- --------------')
+                    if 'result' in result:
+                        send_client = result
+                        save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - no;send to:{fast_provider}")
+                    else: print(f'Result ------------> {result}')
+                
+                print('############## PROVIDERS ##################')
+                if 'result' in send_client:
+                    return send_client
+                else: return None
+            else:
+                print('############## PROVIDERS ##################')
+                pool = Pool(num_threads_net, init_worker)
+                for num in range(num_threads_net):
+                    l.append([request_data, mainnet_providers[num]['url']])
+                results = pool.map(send_transaction, l)
+
+                for result in results:
+                    print(f'------------- -------- {result} ---- --------------')
+                    if 'result' in result:
+                        send_client = result
+                        save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - no;send to:{fast_provider}")
+                    else: print(f'Result ------------> {result}')
+                
+                print('############## PROVIDERS ##################')
+                if 'result' in send_client:
+                    return send_client
+                else: return None
     else:
         response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
         save_file('response',f'{response}')
         return response.content
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3100)
+    freeze_support()
+    net = argv[1]
+    mode = net
+    print(f'[I] Version: {version}')
+    print(f'[I] Stat server: {stat_server}')
+    print('[*] Starting checks provider ...')
+    
+    if net != 'test':
+        print('[I] Запущена основная сеть')
+        res = sort_provide(mainnet_providers)
+        fast_provider = 'https://eth-mainnet.g.alchemy.com/v2/ANUgbxXb5fRwPxLlAZ9fGcKGYdcoaik5' #find_key(mainnet_providers, res)
+        num_threads_net = len(mainnet_providers)
+    else:
+        #======= test =======
+        print(f'[I] Запущена тестовая сеть')
+        res = sort_provide(testnet_providers)
+        fast_provider = find_key(testnet_providers, res)
+        num_threads_net = len(testnet_providers)
+        #====================
+        
+    res = sort_provide(mev_providers)
+    fast_mev = find_key(mev_providers, res)
+    num_threads_mev = len(mev_providers)
+
+    
+    print(f'[I] Best server provider: {fast_provider}')
+    print(f'[I] Best server MEV: {fast_mev}')
+    app.run(host='0.0.0.0', port=proxy_port)

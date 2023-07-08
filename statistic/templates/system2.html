@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CPU Load Indicator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>CPU Load Indicator</h1>
+    <canvas id="cpu_load_chart" width="400" height="100"></canvas>
+    <script>
+        var ctx = document.getElementById('cpu_load_chart').getContext('2d');
+        var chart = new Chart(ctx, {
+            type: 'horizontalBar',
+            data: {
+                labels: ['CPU Load'],
+                datasets: [{
+                    data: [0],
+                    backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    x: {
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            stepSize: 10
+                        }
+                    }
+                }
+            }
+        });
+
+        setInterval(function() {
+            $.ajax({
+                url: '/cpu_load',
+                success: function(data) {
+                    chart.data.datasets[0].data = [data.cpu_load];
+                    chart.update();
+                }
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

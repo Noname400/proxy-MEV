@@ -1,0 +1,7 @@
+flask
+requests
+web3
+eth_utils
+psutil
+py-evm
+virtualenv

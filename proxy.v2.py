@@ -272,7 +272,7 @@ def handle_request():
 
 if __name__ == '__main__':
     freeze_support()
-    net = 'mainnet' #argv[1]
+    net = argv[1]
     mode = net
     print(f'[I] Version: {version}')
     print(f'[I] Stat server: {stat_server}')
@@ -287,7 +287,7 @@ if __name__ == '__main__':
         #======= test =======
         print(f'[I] Запущена тестовая сеть')
         res = sort_provide(testnet_providers)
-        fast_provider = find_key(testnet_providers, res)
+        fast_provider = 'https://goerli.blockpi.network/v1/rpc/public'#find_key(testnet_providers, res)
         num_threads_net = len(testnet_providers)
         #====================
         

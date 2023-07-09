@@ -5,7 +5,7 @@
 @telegram: https://t.me/NonameHunt
 """
 
-version = 'server statistic 0.1 rev/05.07.23'
+version = 'server statistic 0.2 rev/09.07.23'
 
 telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
 telegram_channel_id = '@scanpvknon'
@@ -38,6 +38,7 @@ def savedata():
     from_ = request.json['from_']
     to_ = request.json['to_']
     value_ = request.json['value_']
+    tip_ = request.json['tip_']
     print(request.json)
 
     conn = sqlite3.connect(DB)
@@ -53,8 +54,8 @@ def savedata():
         return jsonify({'message': 'Data +'})
 
     else:
-        insert_query = "INSERT INTO stat (ip_, from_, to_, value_, count_, timestamp_) VALUES (?, ?, ?, ?, ?, ?)"
-        conn.execute(insert_query, (ip_, from_, to_, value_, 1, date_str()))
+        insert_query = "INSERT INTO stat (ip_, from_, to_, value_, count_, tip_, timestamp_) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        conn.execute(insert_query, (ip_, from_, to_, value_, 1, tip_, date_str()))
         conn.commit()
         conn.close()
         return jsonify({'message': 'Data add'})
@@ -82,7 +83,7 @@ if __name__ == '__main__':
 
     conn = sqlite3.connect(DB)
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS stat (id INTEGER PRIMARY KEY, ip_ TEXT, from_ TEXT, to_ TEXT, value_ TEXT, count_ INTEGER, timestamp_ TEXT)')
+    c.execute('CREATE TABLE IF NOT EXISTS stat (id INTEGER PRIMARY KEY, ip_ TEXT, from_ TEXT, to_ TEXT, value_ TEXT, count_ INTEGER, tip_ TEXT, timestamp_ TEXT)')
     conn.commit()
     conn.close()
     

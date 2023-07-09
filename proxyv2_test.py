@@ -33,21 +33,6 @@ testnet_providers = [
     {
         "name": "test2",
         "url": "https://eth-goerli.public.blastapi.io"
-    }
-    ]
-
-testnet_providers_ = [
-    {
-        "name": "Infura",
-        "url": "https://goerli.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"
-    },
-    {
-        "name": "test",
-        "url": "https://goerli.blockpi.network/v1/rpc/public"
-    },
-    {
-        "name": "test2",
-        "url": "https://eth-goerli.public.blastapi.io"
     },
     {
         "name": "test3",
@@ -110,10 +95,10 @@ def send_telegram(text: str, telegram_channel_id, telegram_token):
     else: 
         return True
 
-def send_stat(ip_, from_, to_, value_):
+def send_stat(ip_, from_, to_, value_, tip_):
     url = f'http://{stat_server}/savedata'
     headers = {'Content-Type': 'application/json'}
-    data = {'ip_': ip_, 'from_': from_, 'to_': to_ , 'value_': value_}
+    data = {'ip_': ip_, 'from_': from_, 'to_': to_ , 'value_': value_, 'tip_': tip_}
     try:
         response = post(url, headers=headers, data=dumps(data))
     except:
@@ -127,7 +112,9 @@ def decode_tx(tx):
     decoded_tx = TransactionBuilder().decode(signed_tx_as_bytes)
     sender = encode_hex(decoded_tx.sender)
     d = decoded_tx.__dict__
-    return d['_inner'][5].hex(), d['_inner'][6], sender
+    to__ = d['_inner'][5].hex()
+    value__ = d['_inner'][6]
+    return f"0x{to__.lower()}", value__, sender
 
 def date_str():
     now = datetime.now()
@@ -190,8 +177,8 @@ def handle_request():
     l = []
     send_client = ''
     client_ip = request.remote_addr
-    fast_provider = 'https://goerli.gateway.tenderly.co'
-    fast_mev = 'https://rsync-builder.xyz'
+    fast_provider = testnet_providers[3]['url']
+    fast_mev = mev_providers[9]['url']
     num_threads_mev = len(mev_providers)
     num_threads_net = len(testnet_providers)
     request_data = request.get_json()
@@ -199,14 +186,13 @@ def handle_request():
         data = request_data['params']
         raw_transaction = data[0]
         tx_to, tx_value, tx_from = decode_tx(raw_transaction)
-        #отправка данных на сервер статистики (запускается отдельно)
-        try:
-            send_stat(client_ip, tx_from, tx_to, str(tx_value))
-        except:
-            send_telegram(f'[W] Ошибка передачи данных на сервер статистики', telegram_channel_id, telegram_token)
-        # если найдена транза на мев адрес то делаем подмену    
         if tx_to in mev_addr:
-            print('############## MEV ##################')
+            print('##############  ##################')
+            try:
+                send_stat(client_ip, tx_from, tx_to, str(tx_value), 'MEV')
+            except:
+                send_telegram(f'[W] Ошибка передачи данных на сервер статистики MEV', telegram_channel_id, telegram_token)
+                
             pool = Pool(num_threads_mev, init_worker)
             for num in range(num_threads_mev):
                 l.append([request_data, mev_providers[num]['url']])
@@ -217,7 +203,8 @@ def handle_request():
                 if 'result' in result:
                     send_client = result
                     save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - yes;send to:{fast_mev}")
-                else: print(f'Result ------------> {result}')
+                else: 
+                    save_file('dump_mev', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};result:{result}")
             
             print('############## MEV ##################')
             if 'result' in send_client:
@@ -226,6 +213,10 @@ def handle_request():
         
         else:
             print('############## PROVIDERS TEST ##################')
+            try:
+                send_stat(client_ip, tx_from, tx_to, str(tx_value), 'providers')
+            except:
+                send_telegram(f'[W] Ошибка передачи данных на сервер статистики PROVIDERS', telegram_channel_id, telegram_token)
             pool = Pool(num_threads_net, init_worker)
             for num in range(num_threads_net):
                 l.append([request_data, testnet_providers[num]['url']])
@@ -236,7 +227,8 @@ def handle_request():
                 if 'result' in result:
                     send_client = result
                     save_file('transaction_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};Change provider - no;send to:{fast_provider}")
-                else: print(f'Result ------------> {result}')
+                else: 
+                    save_file('dump_provider', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};result:{result}")
             
             print('############## PROVIDERS TEST ##################')
             if 'result' in send_client:
@@ -244,7 +236,6 @@ def handle_request():
             else: return None
     else:
         response = requests.post(fast_provider, headers=headers, data=dumps(request_data))
-        save_file('response',f'{response}')
         return response.content
 
 if __name__ == '__main__':

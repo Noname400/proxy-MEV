@@ -1,3 +1,12 @@
+#!/usr/bin/python3
+# encoding=utf-8
+# -*- coding: utf-8 -*-
+"""
+@author: NonameHUNT
+@GitHub: https://github.com/Noname400
+@telegram: https://t.me/NonameHunt
+"""
+
 from multiprocessing import Pool, freeze_support, cpu_count
 from signal import SIGINT, SIG_IGN, signal
 from flask import Flask, request, render_template
@@ -14,12 +23,19 @@ from sys import argv
 import psutil
 from hexbytes import HexBytes
 
-version = 'proxy server 0.13 mainnet / 09.07.23'
-telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
-telegram_channel_id = '@scanpvknon'
+version = 'proxy server 0.14 mainnet / 10.07.23'
+
 app = Flask(__name__)
 
+fast_mainnet_provider = ""
+fast_mev_provider = ""
+mev_addr = ['0x7a250d5630b4cf539739df2c5dacb4c659f2488d','0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b','0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad']
+
+
 stat_server = '127.0.0.1:3200'
+headers = {'Content-Type': 'application/json'}
+telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
+telegram_channel_id = '@scanpvknon'
 
 mainnet_providers = [
     {
@@ -57,14 +73,6 @@ mev_providers = [
     {"name": "rsync-builder", "url": "https://rsync-builder.xyz"}
 ]
 
-fast_mainnet_provider = ""
-fast_mev_provider = ""
-mev_addr = ['0x7a250d5630b4cf539739df2c5dacb4c659f2488d','0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b','0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad']
-headers = {'Content-Type': 'application/json'}
-
-def init_worker():
-    signal(SIGINT, SIG_IGN)
-
 def send_telegram(text: str, telegram_channel_id, telegram_token):
     try:
         get('https://api.telegram.org/bot{}/sendMessage'.format(telegram_token), params=dict(
@@ -86,6 +94,9 @@ def send_stat(ip_, from_, to_, value_, tip_):
         return None
     j = response.json()
     return j['message']
+
+def init_worker():
+    signal(SIGINT, SIG_IGN)
 
 def decode_tx(tx):
     original_hexstr = tx
@@ -109,36 +120,18 @@ def save_file(infile, text):
     f.write(f'{text}\n')
     f.close()
 
-# def find_key(prov_list, value):
-#     for dictionary in prov_list:
-#         for key, val in dictionary.items():
-#             if val == value:
-#                 return dictionary['url']
-#     return None
-
-# def check_provider_speed(provider):
-#     try:
-#         start_time = time()
-#         response = requests.get(provider["url"])
-#         end_time = time()
-#         response_time = end_time - start_time
-#         return response_time
-#     except requests.exceptions.RequestException as e:
-#         return None
-    
-# def sort_provide(prov_list):
-#     response_times = {}
-#     for provider in prov_list:
-#         response_time = check_provider_speed(provider)
-#         if response_time is not None:
-#             response_times[provider["name"]] = response_time
-#     fastest_provider = min(response_times, key=response_times.get)
-#     return fastest_provider
-
 def send_transaction(data):
     request_data = data[0]
     url = data[1]
-    response = requests.post(url, headers=headers, data=dumps(request_data))
+    client_ip = data[2]
+    tx_to = data[3]
+    tx_value = data[4]
+    tx_from = data[5]
+    
+    try:
+        response = requests.post(url, headers=headers, data=dumps(request_data))
+    except:
+        save_file('error', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};response:{response.content}")
     return response.json()
 
 @app.route('/system')
@@ -179,7 +172,7 @@ def handle_request():
                 
             pool = Pool(num_threads_mev, init_worker)
             for num in range(num_threads_mev):
-                l.append([request_data, mev_providers[num]['url']])
+                l.append([request_data, mev_providers[num]['url'], client_ip, tx_to, tx_value, tx_from])
             results = pool.map(send_transaction, l)
 
             for result in results:
@@ -204,7 +197,7 @@ def handle_request():
                 
             pool = Pool(num_threads_net, init_worker)
             for num in range(num_threads_net):
-                l.append([request_data, mainnet_providers[num]['url']])
+                l.append([request_data, mainnet_providers[num]['url'], client_ip, tx_to, tx_value, tx_from])
             results = pool.map(send_transaction, l)
 
             for result in results:

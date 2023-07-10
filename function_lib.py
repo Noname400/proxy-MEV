@@ -118,10 +118,10 @@ def send_transaction(data):
     tx_to = data[3]
     tx_value = data[4]
     tx_from = data[5]
-    
+    tip = data[6]
     try:
         response = requests.post(url, headers=headers, data=dumps(request_data))
-    except:
-        save_file('error', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};response:{response.content}")
-
+    except Exception as e:
+        save_file(f'error-{tip}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};URL:{url};data:{request_data};error:{e}")
+        return None
     return response.json()

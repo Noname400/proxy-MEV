@@ -30,16 +30,28 @@ def date_str():
     now = datetime.now()
     return now.strftime("%Y/%m/%d/ %H:%M:%S")
 
+DB = f'database_v1.db'
+NUMBER = 0
+print('-'*70,end='\n')
+print(f'[I] Version: {version}')
+print(f'[I] Start proogramm: {date_str()}')
+print(f'[I] File DB: {DB}')
+print('-'*70,end='\n')
+
+conn = sqlite3.connect(DB)
+c = conn.cursor()
+c.execute('CREATE TABLE IF NOT EXISTS stat (id INTEGER PRIMARY KEY, ip_ TEXT, from_ TEXT, to_ TEXT, value_ TEXT, count_ INTEGER, tip_ TEXT, timestamp_ TEXT)')
+conn.commit()
+conn.close()
+
 @app.route('/savedata', methods=['POST'])
 def savedata():
     counts = 0
-    print(request.json)
     ip_ = request.json['ip_']
     from_ = request.json['from_']
     to_ = request.json['to_']
     value_ = request.json['value_']
     tip_ = request.json['tip_']
-    print(request.json)
 
     conn = sqlite3.connect(DB)
     select_query = "SELECT count_ FROM stat WHERE from_ = ? AND to_ = ?"
@@ -73,18 +85,4 @@ def stat():
     return render_template('stat.html', data=data, limit=limit, page=page, len_=len_)
 
 if __name__ == '__main__':
-    DB = f'database_v1.db'
-    NUMBER = 0
-    print('-'*70,end='\n')
-    print(f'[I] Version: {version}')
-    print(f'[I] Start proogramm: {date_str()}')
-    print(f'[I] File DB: {DB}')
-    print('-'*70,end='\n')
-
-    conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS stat (id INTEGER PRIMARY KEY, ip_ TEXT, from_ TEXT, to_ TEXT, value_ TEXT, count_ INTEGER, tip_ TEXT, timestamp_ TEXT)')
-    conn.commit()
-    conn.close()
-    
     app.run(host='0.0.0.0', port=3200)

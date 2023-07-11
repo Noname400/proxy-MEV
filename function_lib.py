@@ -6,8 +6,8 @@
 @GitHub: https://github.com/Noname400
 @telegram: https://t.me/NonameHunt
 """
+version = 'proxy function 0.11 mainnet / 11.07.23'
 
-from multiprocessing import Pool, freeze_support, cpu_count
 from signal import SIGINT, SIG_IGN, signal
 from flask import Flask, request, render_template
 import requests
@@ -15,40 +15,30 @@ from requests import get, post
 from json import dumps
 from time import time
 from web3 import Web3
+from eth_utils import keccak
 from os import path, mkdir
 from datetime import datetime
 from eth.vm.forks.arrow_glacier.transactions import ArrowGlacierTransactionBuilder as TransactionBuilder
 from eth_utils import (encode_hex,to_bytes,)
 from sys import argv
 import psutil
-from hexbytes import HexBytes
+from celery import Celery
 
 stat_server = '127.0.0.1:3200'
 headers = {'Content-Type': 'application/json'}
 telegram_token = '5311024399:AAF6Ov-sMSc4dd2DDdx0hF_B-5-4vPerFTs'
 telegram_channel_id = '@scanpvknon'
 
+class raw_tx:
+    id = 0
+    raw = ''
+    hash_tx = ''
+
 mainnet_providers = [
-    {
-        "name": "Infura",
-        "url": "https://mainnet.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"
-    },
-    {
-        "name": "QuickNode",
-        "url": "https://frequent-flashy-theorem.discover.quiknode.pro/7e58b0a32c49c77019714bded2cb0d88420fb393/"
-    },
-    {
-        "name": "Alchemy",
-        "url": "https://eth-mainnet.g.alchemy.com/v2/gBGU0r8-WxEIo4gyN5Qrdu47hahJnXhD"
-    },
-    {
-        "name": "pokt",
-        "url": "https://eth-mainnet.gateway.pokt.network/v1/lb/d518f45b2a8952940ec35399"
-    },
-    {
-        "name": "pokt",
-        "url": "https://eth-mainnet.gateway.pokt.network/v1/lb/d518f45b2a8952940ec35399"
-    }
+    {"name": "Infura", "url": "https://mainnet.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"},
+    {"name": "QuickNode", "url": "https://frequent-flashy-theorem.discover.quiknode.pro/7e58b0a32c49c77019714bded2cb0d88420fb393/"},
+    {"name": "Alchemy", "url": "https://eth-mainnet.g.alchemy.com/v2/gBGU0r8-WxEIo4gyN5Qrdu47hahJnXhD"},
+    {"name": "pokt", "url": "https://eth-mainnet.gateway.pokt.network/v1/lb/d518f45b2a8952940ec35399"}
     ]
 
 mev_providers = [
@@ -63,6 +53,13 @@ mev_providers = [
     {"name": "relayoor-wtf", "url": "https://relayooor.wtf"},
     {"name": "rsync-builder", "url": "https://rsync-builder.xyz"}
 ]
+
+# mainnet_providers = [
+#     {"name": "Infura", "url": "https://goerli.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"},
+#     {"name": "test", "url": "https://goerli.blockpi.network/v1/rpc/public"},
+#     {"name": "test2", "url": "https://eth-goerli.public.blastapi.io"},
+#     {"name": "test3", "url": "https://goerli.gateway.tenderly.com"}
+#     ]
 
 def send_telegram(text: str, telegram_channel_id, telegram_token):
     try:
@@ -110,18 +107,3 @@ def save_file(infile, text):
     f = open(file, 'a', encoding='utf-8', errors='ignore')
     f.write(f'{text}\n')
     f.close()
-
-def send_transaction(data):
-    request_data = data[0]
-    url = data[1]
-    client_ip = data[2]
-    tx_to = data[3]
-    tx_value = data[4]
-    tx_from = data[5]
-    tip = data[6]
-    try:
-        response = requests.post(url, headers=headers, data=dumps(request_data))
-    except Exception as e:
-        save_file(f'error-{tip}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};URL:{url};data:{request_data};error:{e}")
-        return None
-    return response.json()

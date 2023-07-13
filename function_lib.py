@@ -12,7 +12,7 @@ from signal import SIGINT, SIG_IGN, signal
 from flask import Flask, request, render_template
 import requests
 from requests import get, post
-from json import dumps
+from json import dumps, loads
 from time import time
 from web3 import Web3
 from eth_utils import keccak
@@ -33,6 +33,9 @@ class raw_tx:
     id = 0
     raw = ''
     hash_tx = ''
+
+class Error_Done(Exception):
+    pass
 
 mainnet_providers = [
     {"name": "Infura", "url": "https://mainnet.infura.io/v3/4766aaf656954c52ae92eed6abc7f8cc"},
@@ -60,6 +63,17 @@ mev_providers = [
 #     {"name": "test2", "url": "https://eth-goerli.public.blastapi.io"},
 #     {"name": "test3", "url": "https://goerli.gateway.tenderly.com"}
 #     ]
+
+def process_json(data):
+    if isinstance(data, dict):  # Если значение - объект (словарь)
+        for key, value in data.items():
+            print(key)
+            process_json(value)  # Рекурсивный вызов для вложенных значений
+    elif isinstance(data, list):  # Если значение - список
+        for item in data:
+            process_json(item)  # Рекурсивный вызов для каждого элемента списка
+    else:  # Если значение - примитивный тип данных (строка, число и т.д.)
+        print(data)
 
 def send_telegram(text: str, telegram_channel_id, telegram_token):
     try:

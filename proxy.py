@@ -9,7 +9,7 @@
 
 from function_lib import *
 
-version = 'proxy server 0.19 mainnet / 11.07.23'
+version = 'proxy server 0.21 mainnet / 13.07.23'
 
 app = Flask(__name__)
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'  # URL для Redis
@@ -21,9 +21,10 @@ fast_mainnet_provider = ""
 fast_mev_provider = ""
 scan_addr = ['0x7a250d5630b4cf539739df2c5dacb4c659f2488d','0xef1c6e67703c7bd7107eed8303fbe6ec2554bf6b','0x3fc91a3afd70395cd496c647d5a6cc9d4b2b7fad']
 
-@celery.task
+@celery.task(bind=True, autoretry_for=(Error_Done,), retry_kwargs={'max_retries': 10, 'countdown': 15})
 def send_transaction(*args):
-    for i in range(len(args)):
+    done = False
+    for i in range(1, len(args)):
         request_data = args[i][0]
         url = args[i][1]
         client_ip = args[i][2]
@@ -34,12 +35,17 @@ def send_transaction(*args):
         try:
             response = requests.post(url, headers=headers, data=dumps(request_data))
         except:
-            save_file(f'error-{desc}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};response:{response.content};result:{response.json()}")
-        
-        if 'result' in response.json():
-            save_file(f'transaction_provider-{desc}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};SEND:{url};result:{response.json()}")
-        else:
-            save_file(f'dump_provider-{desc}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};result:{response.json()}")
+            save_file(f'error_{desc}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_value};VALUE:{tx_from};response:{response.content};result:{response.json()}")
+        finally:
+            try:
+                if 'result' in response.json():
+                    done = True
+                    save_file(f'transaction_{desc}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};SEND:{url};result:{response.json()}")
+                else:
+                    save_file(f'dump_{desc}', f"{date_str()};IP:{client_ip};TO:{tx_to};FROM:{tx_from};VALUE:{tx_value};result:{response.json()}")
+            except: continue
+       
+    if not done: raise Error_Done()
 
 @app.route('/system')
 def system():
@@ -56,19 +62,26 @@ def system_data():
 @app.route('/', methods=['POST'])
 def handle_request():
     l = []
+    request_data = {}
     client_ip = request.remote_addr
     fast_provider = mainnet_providers[2]['url']
     num_threads_mev = len(mev_providers)
     num_threads_net = len(mainnet_providers)
-    request_data = request.get_json()
+    
+    try:
+        request_data = request.get_json()
+    except: 
+        save_file('error_request_data', request_data)
+        return None
     
     if request_data['method'] == 'eth_sendRawTransaction':
-        save_file('request_data', request_data)
+        save_file('request_data_eth_sendRawTransaction', request_data)
         raw_tx.id = request_data['id']
         raw_tx.raw = request_data['params'][0]
         raw_tx.hash_tx = f'0x{keccak(bytes.fromhex(raw_tx.raw[2:])).hex()}'        
         tx_to, tx_value, tx_from = decode_tx(raw_tx.raw)
         # если найдена транза на scan_addr
+        
         if tx_to in scan_addr:
             ############## MEV ##################
             #отправка данных на сервер статистики (запускается отдельно)
@@ -94,7 +107,7 @@ def handle_request():
             
             for num in range(num_threads_net):
                 l.append([request_data, mainnet_providers[num]['url'], client_ip, tx_to, tx_value, tx_from, 'provider'])
-                
+
             task = send_transaction.apply_async(args=l, ignore_result=True)
             res = {'jsonrpc': '2.0', 'id': raw_tx.id, 'result': raw_tx.hash_tx}
             return dumps(res)
